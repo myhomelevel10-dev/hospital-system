@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الاستقبال</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { background: #000; color: #0f0; font-family: 'Cairo', sans-serif; padding: 15px; margin: 0; }
+        .header { text-align: center; margin-bottom: 20px; color: #0ff; text-shadow: 0 0 10px #0ff; }
+        .box { background: #0a0a0a; border: 1px solid #0f0; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        .form-row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+        input, select { flex: 1; background: #000; border: 1px solid #0f0; color: #0f0; padding: 10px; border-radius: 8px; font-family: inherit; font-size: 1rem; min-width: 150px; }
+        button { background: #0f0; color: #000; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; font-family: inherit; width: 100%; font-size: 1.1rem; }
+        button:hover { background: #0ff; box-shadow: 0 0 15px #0ff; }
+        .patient-card { background: #111; border: 1px solid #333; border-radius: 10px; padding: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .p-info strong { font-size: 1.2rem; color: #0ff; }
+        .p-info span { font-size: 0.9rem; color: #aaa; display: block; }
+        .p-actions button { width: auto; padding: 8px 15px; font-size: 0.9rem; background: #ffff00; color: #000; }
+    </style>
+</head>
+<body>
+    <h1 class="header">🏥 شاشة الاستقبال</h1>
+    
+    <div class="box">
+        <h3>➕ تسجيل مريض جديد</h3>
+        <div class="form-row">
+            <input type="text" id="regName" placeholder="اسم المريض">
+            <input type="text" id="regPhone" placeholder="رقم الهاتف">
+        </div>
+        <div class="form-row">
+            <select id="regConsult">
+                <option value="باطنية">باطنية</option>
+                <option value="أطفال">أطفال</option>
+                <option value="جراحة">جراحة</option>
+                <option value="عظام">عظام</option>
+            </select>
+            <input type="text" id="regDoctor" placeholder="اسم الطبيب">
+        </div>
+        <button onclick="registerPatient()">تسجيل المريض</button>
+    </div>
+
+    <div class="box">
+        <h3>📋 المرضى النشطون</h3>
+        <div id="patientsList"></div>
+    </div>
+
+    <script>
+        const ws = new WebSocket(`ws://${location.host}/ws?role=reception`);
+        let patients = [];
+
+        ws.onopen = () => ws.send(JSON.stringify({ type: 'request_sync', data: {} }));
+        ws.onmessage = (e) => {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'init' && msg.patients) { patients = msg.patients; render(); }
+            else if (msg.type === 'patient_added' || msg.type === 'patient_updated') {
+                if (msg.patient.status !== 'discharged') {
+                    const i = patients.findIndex(p => p.id === msg.patient.id);
+                    if (i >= 0) patients[i] = msg.patient; else patients.push(msg.patient);
+                } else { patients = patients.filter(p => p.id !== msg.patient.id); }
+                render();
+            }
+            else if (msg.type === 'patient_removed') { patients = patients.filter(p => p.id !== msg.patientId); render(); }
+        };
+
+        function registerPatient() {
+            const name = document.getElementById('regName').value.trim();
+            if (!name) return alert('أدخل اسم المريض');
+            ws.send(JSON.stringify({
+                type: 'register',
+                data: {
+                    name: name,
+                    phone: document.getElementById('regPhone').value,
+                    consult: document.getElementById('regConsult').value,
+                    doctor: document.getElementById('regDoctor').value
+                }
+            }));
+            document.getElementById('regName').value = '';
+            document.getElementById('regPhone').value = '';
+        }
+
+        function render() {
+            document.getElementById('patientsList').innerHTML = patients.map(p => `
+                <div class="patient-card">
+                    <div class="p-info">
+                        <strong>${p.name}</strong>
+                        <span>رقم: #${p.seq} | ${p.consult}</span>
+                    </div>
+                    <div class="p-actions">
+                        <button onclick="routeTo('${p.id}', 'pharmacy')">صيدلية</button>
+                        <button onclick="routeTo('${p.id}', 'lab')">مختبر</button>
+                        <button onclick="routeTo('${p.id}', 'xray')">أشعة</button>
+                    </div>
+                </div>
+            `).join('') || 'لا يوجد مرضى';
+        }
+
+        function routeTo(id, dept) {
+            ws.send(JSON.stringify({ type: 'route', data: { id, toDept: dept } }));
+        }
+    </script>
+</body>
+</html>

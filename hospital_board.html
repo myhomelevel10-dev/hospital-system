@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>شاشة العرض</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;900&family=Orbitron:wght@900&display=swap" rel="stylesheet">
+    <style>
+        body { background: #000; color: #0f0; font-family: 'Cairo', sans-serif; margin: 0; padding: 20px; text-align: center; }
+        .header { font-size: 2rem; color: #0ff; margin-bottom: 30px; font-weight: bold; }
+        .current-box { background: #0a0a0a; border: 3px solid #ffff00; border-radius: 20px; padding: 30px; margin-bottom: 30px; box-shadow: 0 0 30px rgba(255,255,0,0.2); }
+        .current-name { font-size: 4rem; color: #ffff00; font-family: 'Orbitron', sans-serif; margin: 10px 0; text-shadow: 0 0 20px #ffff00; }
+        .current-dest { font-size: 2rem; color: #0f0; }
+        .current-seq { font-size: 6rem; color: #0ff; font-family: 'Orbitron', sans-serif; margin: 10px 0; text-shadow: 0 0 30px #0ff; }
+        .queue { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        .q-item { background: #111; border: 1px solid #333; border-radius: 10px; padding: 15px; }
+    </style>
+</head>
+<body>
+    <div class="header">🏥 شاشة الانتظار</div>
+    
+    <div class="current-box" id="currentBox" style="display:none;">
+        <div class="current-name" id="cName">---</div>
+        <div class="current-dest" id="cDest">---</div>
+        <div class="current-seq" id="cSeq">00</div>
+    </div>
+    
+    <div class="queue" id="queueList"></div>
+
+    <script>
+        const ws = new WebSocket(`ws://${location.host}/ws?role=tv`);
+        let patients = [];
+
+        ws.onopen = () => ws.send(JSON.stringify({ type: 'request_sync', data: {} }));
+        ws.onmessage = (e) => {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'init' && msg.patients) { patients = msg.patients; render(); }
+            else if (msg.type === 'patient_added' || msg.type === 'patient_updated') {
+                if (msg.patient.status !== 'discharged') {
+                    const i = patients.findIndex(p => p.id === msg.patient.id);
+                    if (i >= 0) patients[i] = msg.patient; else patients.push(msg.patient);
+                } else { patients = patients.filter(p => p.id !== msg.patient.id); }
+                render();
+            }
+            else if (msg.type === 'patient_removed') { patients = patients.filter(p => p.id !== msg.patientId); render(); }
+            else if (msg.type === 'patient_called') {
+                const p = msg.patient;
+                speak(`المراجع ${p.name}، رقم ${p.seq}، يرجى التوجه إلى ${p.current_dept}`);
+                render();
+            }
+        };
+
+        function render() {
+            const active = patients.filter(p => p.status !== 'discharged');
+            if (active.length > 0) {
+                const c = active[0];
+                document.getElementById('currentBox').style.display = 'block';
+                document.getElementById('cName').innerText = c.name;
+                document.getElementById('cDest').innerText = 'يرجى التوجه إلى: ' + (c.current_dept === 'doctor' ? 'الطبيب' : c.current_dept === 'pharmacy' ? 'الصيدلية' : c.current_dept === 'lab' ? 'المختبر' : 'الأشعة');
+                document.getElementById('cSeq').innerText = c.seq;
+            } else {
+                document.getElementById('currentBox').style.display = 'none';
+            }
+
+            document.getElementById('queueList').innerHTML = active.slice(1).map(p => `
+                <div class="q-item">
+                    <div style="font-size:1.5rem; color:#0ff;">#${p.seq}</div>
+                    <div>${p.name}</div>
+                </div>
+            `).join('');
+        }
+
+        function speak(text) {
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = 'ar-SA'; window.speechSynthesis.speak(u);
+        }
+    </script>
+</body>
+</html>

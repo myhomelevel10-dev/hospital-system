@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>رمز الاتصال - المستشفى</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            background: #000; 
+            color: #00ff66; 
+            font-family: 'Cairo', sans-serif; 
+            text-align: center; 
+            padding: 20px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            margin: 0; 
+            overflow: hidden;
+        }
+        h2 { color: #00ffff; margin-bottom: 15px; font-size: 1.8rem; text-shadow: 0 0 10px #00ffff; }
+        .qr-container { 
+            background: #fff; 
+            padding: 15px; 
+            border-radius: 20px; 
+            display: inline-block; 
+            box-shadow: 0 0 30px #00ff66; 
+            min-width: 250px;
+            min-height: 250px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .qr-container img { display: block; margin: 0 auto; width: 220px; height: 220px; }
+        
+        .ip-text { 
+            font-size: 2.2rem; 
+            font-weight: 900; 
+            margin-top: 20px; 
+            color: #ffff00; 
+            direction: ltr; 
+            text-shadow: 0 0 15px #ffff00;
+            background: #111;
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: 1px dashed #ffff00;
+            min-width: 300px;
+        }
+        .status { color: #aaa; font-size: 0.9rem; margin-top: 10px; }
+        .back-btn { 
+            margin-top: 20px; 
+            padding: 10px 30px; 
+            border-radius: 10px; 
+            border: 2px solid #ff5555; 
+            background: #000; 
+            color: #ff5555; 
+            font-family: 'Cairo'; 
+            font-size: 1.1rem; 
+            font-weight: bold; 
+            cursor: pointer; 
+            text-decoration: none; 
+            transition: 0.3s;
+        }
+        .back-btn:hover { background: #ff5555; color: #fff; box-shadow: 0 0 15px #ff5555; }
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+    </style>
+</head>
+<body>
+    <h2>📱 امسح الرمز للاتصال</h2>
+    
+    <div class="qr-container" id="qr-wrapper">
+        <!-- سيتم وضع صورة الـ QR هنا -->
+        <div id="qrcode" style="color: #000; font-weight: bold; font-family: Cairo, sans-serif;">جاري التحميل...</div>
+    </div>
+    
+    <div id="status" class="ip-text pulse">جاري جلب الشبكة...</div>
+    <div class="status">افتح كاميرا الجهاز الآخر ووجهها نحو الرمز</div>
+    
+    <a href="index.html" class="back-btn">↩ العودة للقائمة الرئيسية</a>
+
+    <script>
+        async function generateQR() {
+            const statusDiv = document.getElementById('status');
+            const qrcodeDiv = document.getElementById('qrcode');
+            
+            try {
+                // محاولة جلب الـ IP من السيرفر
+                const res = await fetch('/api/get-ip');
+                const data = await res.json();
+                
+                let url = '';
+                if(data && data.ip && data.ip !== '127.0.0.1') {
+                    const port = data.port || 3000;
+                    url = `http://${data.ip}:${port}`;
+                } else {
+                    // إذا فشل جلب الـ IP، نستخدم مسار الصفحة الحالي كاحتياط
+                    url = window.location.origin;
+                }
+
+                statusDiv.innerText = url;
+                statusDiv.style.color = "#ffff00";
+                statusDiv.classList.remove('pulse');
+
+                // استخدام مولّد الـ QR المحلي الموجود في السيرفر (يعمل بدون إنترنت)
+                // بدلاً من مكتبة CDN الخارجية
+                qrcodeDiv.innerHTML = `<img src="/api/qr?d=${encodeURIComponent(url)}&s=220" alt="QR Code" style="border-radius: 8px;">`;
+
+            } catch (e) {
+                statusDiv.innerText = "❌ تعذر الاتصال بالخادم";
+                statusDiv.style.color = "#ff5555";
+                statusDiv.classList.add('pulse');
+                
+                // عرض رسالة بديلة في حال فشل الاتصال
+                qrcodeDiv.innerHTML = '<p style="color:#000; font-weight:bold; text-align:center;">تعذر تحميل الرمز<br>استخدم الرابط بالأسفل</p>';
+            }
+        }
+        
+        // تشغيل الدالة فوراً
+        generateQR();
+        // تحديث كل 10 ثواني في حال تغير الـ IP
+        setInterval(generateQR, 10000);
+    </script>
+</body>
+</html>

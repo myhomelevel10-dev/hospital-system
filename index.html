@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>النظام الطبي الذكي</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { background: #000; color: #0f0; font-family: 'Cairo', sans-serif; padding: 20px; margin: 0; text-align: center; }
+        h1 { color: #0ff; margin-bottom: 40px; text-shadow: 0 0 10px #0ff; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; max-width: 1000px; margin: 0 auto; }
+        .card { background: #0a0a0a; border: 2px solid #0f0; border-radius: 15px; padding: 30px 10px; text-decoration: none; color: #0f0; display: flex; flex-direction: column; align-items: center; gap: 15px; transition: 0.3s; position: relative; }
+        .card:hover { background: rgba(0,255,0,0.1); box-shadow: 0 0 20px #0f0; transform: translateY(-5px); }
+        .card i { font-size: 3rem; }
+        .card span { font-size: 1.2rem; font-weight: bold; }
+        .badge { position: absolute; top: 10px; right: 10px; background: #f00; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem; display: none; }
+    </style>
+</head>
+<body>
+    <h1><i class="fas fa-hospital"></i> النظام الطبي الذكي</h1>
+    
+    <div class="grid" id="menuGrid">
+        <a href="reception.html" class="card" data-badge="reception"><i class="fas fa-desktop"></i><span>الاستقبال</span><span class="badge" id="badge-reception">0</span></a>
+        <a href="doctor.html" class="card" data-badge="doctor"><i class="fas fa-user-md"></i><span>الطبيب</span><span class="badge" id="badge-doctor">0</span></a>
+        <a href="pharmacy.html" class="card" data-badge="pharmacy"><i class="fas fa-pills"></i><span>الصيدلية</span><span class="badge" id="badge-pharmacy">0</span></a>
+        <a href="lab.html" class="card" data-badge="lab"><i class="fas fa-flask"></i><span>المختبر</span><span class="badge" id="badge-lab">0</span></a>
+        <a href="radiology.html" class="card" data-badge="xray"><i class="fas fa-x-ray"></i><span>الأشعة</span><span class="badge" id="badge-xray">0</span></a>
+        <a href="hospital_board.html" class="card"><i class="fas fa-tv"></i><span>شاشة العرض</span></a>
+        <a href="gr.html" class="card"><i class="fas fa-qrcode"></i><span>رمز الاتصال</span></a>
+    </div>
+
+    <script>
+        const ws = new WebSocket(`ws://${location.host}/ws?role=tv`);
+        let patients = [];
+        
+        ws.onopen = () => ws.send(JSON.stringify({ type: 'request_sync', data: {} }));
+        ws.onmessage = (e) => {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'init' && msg.patients) { patients = msg.patients; updateBadges(); }
+            else if (msg.type === 'patient_added' || msg.type === 'patient_updated') {
+                if (msg.patient.status !== 'discharged') {
+                    const i = patients.findIndex(p => p.id === msg.patient.id);
+                    if (i >= 0) patients[i] = msg.patient; else patients.push(msg.patient);
+                } else { patients = patients.filter(p => p.id !== msg.patient.id); }
+                updateBadges();
+            }
+            else if (msg.type === 'patient_removed') { patients = patients.filter(p => p.id !== msg.patientId); updateBadges(); }
+        };
+
+        function updateBadges() {
+            const active = patients.filter(p => p.status !== 'discharged');
+            const counts = {
+                reception: active.length,
+                doctor: active.filter(p => p.current_dept === 'doctor').length,
+                pharmacy: active.filter(p => p.current_dept === 'pharmacy').length,
+                lab: active.filter(p => p.current_dept === 'lab').length,
+                xray: active.filter(p => p.current_dept === 'xray').length
+            };
+            for (let key in counts) {
+                const el = document.getElementById('badge-' + key);
+                if (el) {
+                    el.innerText = counts[key];
+                    el.style.display = counts[key] > 0 ? 'block' : 'none';
+                }
+            }
+        }
+    </script>
+</body>
+</html>

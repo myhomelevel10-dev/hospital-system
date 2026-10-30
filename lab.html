@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>المختبر</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { background: #000; color: #0f0; font-family: 'Cairo', sans-serif; padding: 15px; margin: 0; }
+        .header { text-align: center; margin-bottom: 20px; color: #0ff; text-shadow: 0 0 10px #0ff; }
+        .box { background: #0a0a0a; border: 1px solid #0f0; border-radius: 12px; padding: 15px; margin-bottom: 15px; }
+        .order-card { background: #111; border: 1px solid #333; border-radius: 10px; padding: 15px; margin-bottom: 10px; }
+        input, textarea { width: 100%; background: #000; border: 1px solid #0f0; color: #0f0; padding: 10px; border-radius: 8px; font-family: inherit; box-sizing: border-box; margin-bottom: 10px; }
+        button { background: #0f0; color: #000; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; }
+    </style>
+</head>
+<body>
+    <h1 class="header">🧪 شاشة المختبر</h1>
+    
+    <div class="box">
+        <h3>📋 طلبات التحاليل</h3>
+        <div id="ordersList"></div>
+    </div>
+
+    <script>
+        const ws = new WebSocket(`ws://${location.host}/ws?role=dept&dept=lab`);
+        let orders = [];
+
+        ws.onopen = () => ws.send(JSON.stringify({ type: 'request_sync', data: {} }));
+        ws.onmessage = (e) => {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'init' && msg.labOrders) { orders = msg.labOrders; render(); }
+            else if (msg.type === 'new_lab_order') { orders.push(msg.order); render(); }
+        };
+
+        function render() {
+            document.getElementById('ordersList').innerHTML = orders.map((o, i) => `
+                <div class="order-card">
+                    <h4 style="color:#ffff00; margin-top:0;">${o.patientName}</h4>
+                    <input type="text" id="testName_${i}" placeholder="اسم التحليل">
+                    <textarea id="testResult_${i}" rows="2" placeholder="النتيجة"></textarea>
+                    <button onclick="sendResult(${i})">حفظ وإرسال للطبيب</button>
+                </div>
+            `).join('') || 'لا توجد طلبات';
+        }
+
+        function sendResult(i) {
+            const o = orders[i];
+            const name = document.getElementById('testName_' + i).value;
+            const res = document.getElementById('testResult_' + i).value;
+            if (!name) return alert('أدخل اسم التحليل');
+            
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200"><rect width="100%" height="100%" fill="#fff"/><text x="20" y="40" font-size="20" font-weight="bold">${name}</text><text x="20" y="80" font-size="16">${res}</text></svg>`;
+            
+            ws.send(JSON.stringify({
+                type: 'upload_media',
+                data: { patientName: o.patientName, type: 'مختبر', imageUrl: 'data:image/svg+xml;utf8,' + encodeURIComponent(svg) }
+            }));
+            orders.splice(i, 1); render();
+        }
+    </script>
+</body>
+</html>
